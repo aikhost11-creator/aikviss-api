@@ -2,10 +2,12 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.vps
 *.log
 stderr.log
 orders-logs/
 tmp/
+logs/
 .DS_Store
 Thumbs.db
 .vscode/

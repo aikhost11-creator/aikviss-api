@@ -38,11 +38,42 @@ async function withRetry(fn, args, opts = {}) {
     throw lastErr;
 }
 
-// Create a connection pool
+function toSafeInt(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/**
+ * MySQL prepared statements often reject LIMIT/OFFSET placeholders
+ * (ER_WRONG_ARGUMENTS / Incorrect arguments to mysqld_stmt_execute).
+ * Inline validated integers only — never raw user strings.
+ */
+function inlineLimitOffset(sql, params = []) {
+    if (!sql || !params?.length) return { sql, params };
+
+    let nextSql = sql;
+    const nextParams = [...params];
+
+    if (/LIMIT\s+\?\s+OFFSET\s+\?/i.test(nextSql)) {
+        const offset = toSafeInt(nextParams.pop(), 0);
+        const limit = toSafeInt(nextParams.pop(), 20);
+        nextSql = nextSql.replace(/LIMIT\s+\?\s+OFFSET\s+\?/i, `LIMIT ${limit} OFFSET ${offset}`);
+        return { sql: nextSql, params: nextParams };
+    }
+
+    if (/LIMIT\s+\?/i.test(nextSql)) {
+        const limit = toSafeInt(nextParams.pop(), 20);
+        nextSql = nextSql.replace(/LIMIT\s+\?/i, `LIMIT ${limit}`);
+        return { sql: nextSql, params: nextParams };
+    }
+
+    return { sql: nextSql, params: nextParams };
+}
+
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
-    port: process.env.DB_PORT,
+    port: Number(process.env.DB_PORT || 3306),
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
@@ -51,23 +82,27 @@ const pool = mysql.createPool({
     connectTimeout: 10000,
     connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 25),
     queueLimit: 0,
-    timezone: '+05:30',          // IST — ensures NOW() and CURDATE() use Indian time
-    initCommand: "SET time_zone = '+05:30'"  // Set session timezone on every new connection
+    timezone: '+05:30',
+    initCommand: "SET time_zone = '+05:30'"
 });
 
 pool.on('error', (err) => {
-    // Pool errors are rare but important for stability diagnostics
     console.error('MySQL Pool Error:', err);
 });
 
-// Promisify the pool query method for convenience
 const db = pool.promise();
 
-// Wrap execute/query with retry logic so the whole project benefits without refactoring models.
 const _execute = db.execute.bind(db);
 const _query = db.query.bind(db);
 
-db.execute = async (...args) => withRetry(_execute, args);
-db.query = async (...args) => withRetry(_query, args);
+db.execute = async (sql, params = []) => {
+    const fixed = inlineLimitOffset(sql, params);
+    return withRetry(_execute, [fixed.sql, fixed.params]);
+};
+
+db.query = async (sql, params = []) => {
+    const fixed = inlineLimitOffset(sql, params);
+    return withRetry(_query, [fixed.sql, fixed.params]);
+};
 
 module.exports = db;
