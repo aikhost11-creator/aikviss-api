@@ -1,7 +1,13 @@
 const express = require('express');
 const router  = express.Router();
+const multer  = require('multer');
 const ctrl    = require('../controllers/productController');
 const { auth } = require('../middlewares/auth.js');
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 },
+});
 
 // ── Admin (auth required) ──────────────────────────────────────────────────
 router.post('/createProduct',           auth, ctrl.createProduct);
@@ -12,6 +18,8 @@ router.put('/updateProductStatus/:id',   auth, ctrl.updateProductStatus);
 router.put('/updateProductFeatured/:id', auth, ctrl.updateProductFeatured);
 router.post('/duplicateProduct/:id',     auth, ctrl.duplicateProduct);
 router.delete('/deleteProduct/:id',      auth, ctrl.deleteProduct);
+router.get('/exportCSV',                 auth, ctrl.exportCSV);
+router.post('/importCSV',                auth, upload.single('file'), ctrl.importCSV);
 
 // Reviews admin
 router.get('/getAllReviews',             auth, ctrl.getAllReviewsByPage);

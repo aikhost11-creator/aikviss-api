@@ -1,4 +1,6 @@
-require('dotenv').config();
+// Load tenant-specific .env on VPS (multi-shop). Default: ./.env
+const envPath = process.env.ENV_FILE || require('path').join(__dirname, '.env');
+require('dotenv').config({ path: envPath });
 process.env.TimeZone = 'Asia/Kolkata'; // Force IST for all new Date() calls
 const express = require('express');
 const bodyParser = require('body-parser');

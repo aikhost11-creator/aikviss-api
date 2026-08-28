@@ -1,0 +1,32 @@
+[
+  {
+    "id": "aikvisss",
+    "domain": "aikvisss.shop",
+    "port": 5647,
+    "dbName": "aikvisss_shop"
+  },
+  {
+    "id": "aikvism",
+    "domain": "aikvism.shop",
+    "port": 5648,
+    "dbName": "aikvism_shop"
+  },
+  {
+    "id": "aikvish",
+    "domain": "aikvish.shop",
+    "port": 5649,
+    "dbName": "aikvish_shop"
+  },
+  {
+    "id": "aikvisu",
+    "domain": "aikvisu.shop",
+    "port": 5650,
+    "dbName": "aikvisu_shop"
+  },
+  {
+    "id": "aikvisl",
+    "domain": "aikvisl.shop",
+    "port": 5651,
+    "dbName": "aikvisl_shop"
+  }
+]

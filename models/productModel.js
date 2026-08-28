@@ -318,6 +318,49 @@ const Product = {
         } catch (err) { throw err; }
     },
 
+    getAllForExport: async (filters = {}) => {
+        try {
+            let where = [];
+            let params = [];
+
+            if (filters.searchtxt) {
+                where.push(`(p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ?)`);
+                params.push(`%${filters.searchtxt}%`, `%${filters.searchtxt}%`, `%${filters.searchtxt}%`);
+            }
+            if (filters.categoryId) {
+                where.push(`p.categoryId = ?`);
+                params.push(filters.categoryId);
+            }
+
+            const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+            const [results] = await db.execute(
+                `SELECT p.*, c.name AS categoryName
+                 FROM products p
+                 LEFT JOIN categories c ON p.categoryId = c.id
+                 ${whereClause}
+                 ORDER BY p.sortOrder ASC, p.created_at DESC`,
+                params
+            );
+
+            return results.map((r) => Product._parse(r));
+        } catch (err) { throw err; }
+    },
+
+    getBySlug: async (slug) => {
+        try {
+            const [results] = await db.execute(
+                `SELECT p.*, c.name AS categoryName
+                 FROM products p
+                 LEFT JOIN categories c ON p.categoryId = c.id
+                 WHERE p.slug = ? LIMIT 1`,
+                [slug]
+            );
+            if (!results[0]) return null;
+            return Product._parse(results[0]);
+        } catch (err) { throw err; }
+    },
+
     _parse: (r) => ({
         ...r,
         images:              Product._tryParse(r.images,           []),

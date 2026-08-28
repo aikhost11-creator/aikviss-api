@@ -127,6 +127,109 @@ exports.deleteProduct = async (req, res) => {
     }
 };
 
+exports.exportCSV = async (req, res) => {
+    try {
+        const { searchtxt = '', categoryId } = req.query;
+        const filters = {};
+        if (searchtxt) filters.searchtxt = searchtxt;
+        if (categoryId) filters.categoryId = Number(categoryId);
+
+        const products = await Product.getAllForExport(filters);
+        const { PRODUCT_CSV_HEADERS, productToCsvRow } = require('../utils/productCsv');
+        const { rowsToCsv } = require('../utils/csvHelper');
+
+        const rows = products.map((p) => productToCsvRow(p));
+        const csv = rowsToCsv(PRODUCT_CSV_HEADERS, rows);
+        const filename = `products_${new Date().toISOString().split('T')[0]}.csv`;
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csv);
+    } catch (err) {
+        console.error('exportCSV products:', err);
+        res.status(500).json({ error: err.message || 'Export failed' });
+    }
+};
+
+exports.importCSV = async (req, res) => {
+    try {
+        if (!req.file || !req.file.buffer) {
+            return res.status(400).json({ error: 'CSV file is required (field name: file)' });
+        }
+
+        const mode = String(req.query.mode || 'upsert').toLowerCase(); // upsert | create
+        const text = req.file.buffer.toString('utf8');
+        const { parseCsv } = require('../utils/csvHelper');
+        const { csvRowToProduct } = require('../utils/productCsv');
+        const db = require('../config/db');
+
+        const { records } = parseCsv(text);
+        if (!records.length) {
+            return res.status(400).json({ error: 'CSV has no data rows' });
+        }
+
+        const resolveCategoryId = async (categoryId, categoryName) => {
+            if (categoryId) {
+                const [rows] = await db.execute('SELECT id FROM categories WHERE id = ? LIMIT 1', [categoryId]);
+                if (rows[0]) return rows[0].id;
+            }
+            if (categoryName) {
+                const [rows] = await db.execute('SELECT id FROM categories WHERE name = ? LIMIT 1', [categoryName]);
+                if (rows[0]) return rows[0].id;
+            }
+            return null;
+        };
+
+        let created = 0;
+        let updated = 0;
+        let skipped = 0;
+        const errors = [];
+
+        for (let i = 0; i < records.length; i++) {
+            const rowNum = i + 2; // header is row 1
+            try {
+                const data = csvRowToProduct(records[i]);
+                if (!data) {
+                    errors.push({ row: rowNum, message: 'Product name is required' });
+                    continue;
+                }
+
+                data.categoryId = await resolveCategoryId(data.categoryId, data.categoryName);
+                delete data.categoryName;
+
+                const existing = await Product.getBySlug(data.slug);
+
+                if (existing) {
+                    if (mode === 'create') {
+                        skipped++;
+                        continue;
+                    }
+                    await Product.update(existing.id, data);
+                    updated++;
+                } else {
+                    await Product.create(data);
+                    created++;
+                }
+            } catch (e) {
+                errors.push({ row: rowNum, message: e.message || 'Import failed' });
+            }
+        }
+
+        res.status(200).json({
+            message: 'Import completed',
+            created,
+            updated,
+            skipped,
+            failed: errors.length,
+            total: records.length,
+            errors: errors.slice(0, 50),
+        });
+    } catch (err) {
+        console.error('importCSV products:', err);
+        res.status(500).json({ error: err.message || 'Import failed' });
+    }
+};
+
 // ── Public ─────────────────────────────────────────────────────────────────
 
 exports.getShopListing = async (req, res) => {

@@ -1,7 +1,10 @@
-# aikviss-api deploy
+# Multi-shop API deploy
 
-Push to `main` → live on **https://api.aikviss.online**
+Push to `main` → updates **all 5 shops** on VPS.
 
-Secrets: `VPS_HOST=187.127.101.49` · `VPS_USER=root` · `VPS_SSH_KEY=<private key>`
+Scripts: `deploy/multishop/deploy-api-all.sh`  
+Tenants: `deploy/multishop/tenants.json`
 
-Path: `/var/www/aikviss/api` · PM2 `aikviss-api` · always `npm i --force`
+VPS layout: `/var/www/multishop/sources/api` + `/var/www/multishop/tenants/<domain>/.env`
+
+Full guide: see `MULTISHOP-DEPLOY.md` in monorepo or Hostinger docs.
