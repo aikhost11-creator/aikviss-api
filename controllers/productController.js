@@ -197,7 +197,7 @@ exports.importCSV = async (req, res) => {
                 data.categoryId = await resolveCategoryId(data.categoryId, data.categoryName);
                 delete data.categoryName;
 
-                const existing = await Product.getBySlug(data.slug);
+                const existing = await Product.findBySlug(data.slug);
 
                 if (existing) {
                     if (mode === 'create') {

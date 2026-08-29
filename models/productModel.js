@@ -219,6 +219,21 @@ const Product = {
         } catch (err) { throw err; }
     },
 
+    /** Admin import — match slug regardless of isActive */
+    findBySlug: async (slug) => {
+        try {
+            const [results] = await db.execute(
+                `SELECT p.*, c.name AS categoryName
+                 FROM products p
+                 LEFT JOIN categories c ON p.categoryId = c.id
+                 WHERE p.slug = ? LIMIT 1`,
+                [slug]
+            );
+            if (!results[0]) return null;
+            return Product._parse(results[0]);
+        } catch (err) { throw err; }
+    },
+
     // Related products — same category, exclude current
     getRelated: async (categoryId, excludeId, limit = 8) => {
         try {
@@ -344,20 +359,6 @@ const Product = {
             );
 
             return results.map((r) => Product._parse(r));
-        } catch (err) { throw err; }
-    },
-
-    getBySlug: async (slug) => {
-        try {
-            const [results] = await db.execute(
-                `SELECT p.*, c.name AS categoryName
-                 FROM products p
-                 LEFT JOIN categories c ON p.categoryId = c.id
-                 WHERE p.slug = ? LIMIT 1`,
-                [slug]
-            );
-            if (!results[0]) return null;
-            return Product._parse(results[0]);
         } catch (err) { throw err; }
     },
 
