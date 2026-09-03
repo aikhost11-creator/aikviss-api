@@ -22,7 +22,10 @@ router.get('/exportCSV',                 auth, ctrl.exportCSV);
 router.post('/importCSV',                auth, upload.single('file'), ctrl.importCSV);
 
 // Reviews admin
-router.get('/getAllReviews',             auth, ctrl.getAllReviewsByPage);
+router.get('/getAllReviews',              auth, ctrl.getAllReviewsByPage);
+router.get('/getProductReviews/:id',     auth, ctrl.getReviewsByProduct);
+router.post('/adminAddReview/:id',       auth, ctrl.adminCreateReview);
+router.put('/adminUpdateReview/:id',     auth, ctrl.adminUpdateReview);
 router.put('/updateReviewStatus/:id',    auth, ctrl.updateReviewStatus);
 router.delete('/deleteReview/:id',       auth, ctrl.deleteReview);
 

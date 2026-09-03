@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { create, getAll, getById, getByCustomer, updateStatus, exportCSV, resyncShipeaso, getUnsyncedOrders, syncAllUnsynced } = require('../controllers/orderController');
+const { create, getAll, getById, getByCustomer, updateStatus, exportCSV, resyncShipeaso, getUnsyncedOrders, syncAllUnsynced, validateMobile } = require('../controllers/orderController');
 const { auth } = require('../middlewares/auth.js');
 
 router.post('/createOrder', create);
+router.all('/validateMobile', validateMobile);
 router.get('/getAllOrders',  auth, getAll);
 router.get('/exportCSV',     auth, exportCSV);
 router.get('/getById/:id',   getById);
@@ -14,3 +15,4 @@ router.get('/getUnsyncedOrders',  auth, getUnsyncedOrders);
 router.post('/syncAllUnsynced',   auth, syncAllUnsynced);
 
 module.exports = router;
+

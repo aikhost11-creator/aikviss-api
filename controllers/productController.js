@@ -356,3 +356,39 @@ exports.deleteReview = async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+// Admin: get all reviews for a specific product (including inactive)
+exports.getReviewsByProduct = async (req, res) => {
+    try {
+        const result = await Review.getByProductAdmin(Number(req.params.id));
+        res.status(200).json(result);
+    } catch (err) {
+        console.error('getReviewsByProduct:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Admin: create review for a product
+exports.adminCreateReview = async (req, res) => {
+    try {
+        const result = await Review.create({ ...req.body, productId: req.params.id });
+        await Product.updateRating(req.params.id);
+        res.status(201).json({ message: 'Review added', data: result.data });
+    } catch (err) {
+        console.error('adminCreateReview:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Admin: update review
+exports.adminUpdateReview = async (req, res) => {
+    try {
+        await Review.update(req.params.id, req.body);
+        // recalculate rating for the product
+        if (req.body.productId) await Product.updateRating(req.body.productId);
+        res.status(200).json({ message: 'Review updated' });
+    } catch (err) {
+        console.error('adminUpdateReview:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

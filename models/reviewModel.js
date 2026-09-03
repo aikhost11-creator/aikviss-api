@@ -5,11 +5,28 @@ const Review = {
     create: async (data) => {
         try {
             const [result] = await db.execute(
-                `INSERT INTO product_reviews (productId, reviewerName, rating, title, body, isActive, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())`,
-                [data.productId, data.reviewerName, data.rating, data.title || '', data.body || '']
+                `INSERT INTO product_reviews (productId, reviewerName, rating, title, body, reviewImage, isActive, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`,
+                [data.productId, data.reviewerName, data.rating, data.title || '', data.body || '', data.reviewImage || null]
             );
             return { status: 'success', data: { id: result.insertId } };
+        } catch (err) { throw err; }
+    },
+
+    update: async (id, data) => {
+        try {
+            await db.execute(
+                `UPDATE product_reviews SET reviewerName=?, rating=?, title=?, body=?, reviewImage=?, updated_at=NOW() WHERE id=?`,
+                [data.reviewerName, data.rating, data.title || '', data.body || '', data.reviewImage ?? null, id]
+            );
+            return { status: 'success' };
+        } catch (err) { throw err; }
+    },
+
+    getById: async (id) => {
+        try {
+            const [results] = await db.execute(`SELECT * FROM product_reviews WHERE id=? LIMIT 1`, [id]);
+            return results[0] || null;
         } catch (err) { throw err; }
     },
 
@@ -44,6 +61,17 @@ const Review = {
                 data: results,
                 stats: countResult[0]
             };
+        } catch (err) { throw err; }
+    },
+
+    /** Admin — all reviews for a product (including inactive) */
+    getByProductAdmin: async (productId) => {
+        try {
+            const [results] = await db.execute(
+                `SELECT * FROM product_reviews WHERE productId = ? ORDER BY created_at DESC`,
+                [productId]
+            );
+            return { status: 'success', data: results };
         } catch (err) { throw err; }
     },
 

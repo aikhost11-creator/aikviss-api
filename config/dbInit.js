@@ -1,4 +1,4 @@
-﻿const db = require('./db');
+const db = require('./db');
 
 const tables = [
 
@@ -309,6 +309,7 @@ const tables = [
                 \`rating\`       TINYINT(1)   NOT NULL DEFAULT 5,
                 \`title\`        VARCHAR(500) DEFAULT NULL,
                 \`body\`         TEXT         DEFAULT NULL,
+                \`reviewImage\`  VARCHAR(500) DEFAULT NULL,
                 \`isActive\`     TINYINT(1)   NOT NULL DEFAULT 1,
                 \`created_at\`   DATETIME     NOT NULL,
                 \`updated_at\`   DATETIME     NOT NULL,
@@ -596,7 +597,23 @@ const tables = [
         `
     },
 
+    // PRODUCT REVIEWS — add reviewImage column if missing
+    { name: 'product_reviews_col_reviewImage', sql: "ALTER TABLE `product_reviews` ADD COLUMN `reviewImage` VARCHAR(500) DEFAULT NULL AFTER `body`" },
+
+    // OLD DATA MOBILES (blacklisted phone numbers)
+    {
+        name: 'old_data_mobiles',
+        sql: `
+            CREATE TABLE IF NOT EXISTS \`old_data_mobiles\` (
+                \`mobile\` VARCHAR(20) NOT NULL,
+                PRIMARY KEY (\`mobile\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `
+    }
+
 ];
+
+const phoneValidator = require('../utils/phoneValidator');
 
 async function initDB() {
     console.log('Checking database tables...');
@@ -614,6 +631,10 @@ async function initDB() {
         }
     }
     console.log('Database init complete.\n');
+
+    // Initialize phone validator blacklist in background
+    phoneValidator.init().catch(err => console.error('[PhoneValidator] Failed to initialize:', err.message));
 }
 
 module.exports = initDB;
+

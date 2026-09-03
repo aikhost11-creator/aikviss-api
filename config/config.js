@@ -1,8 +1,8 @@
 module.exports = {
     ftp: {
-        baseURL: "asset.svarnibeauty.com",
-        host: "217.21.85.80",
-        user: "u677986030.asset.svarnibeauty.com",
+        baseURL: "asset.sunkarseekho.com",
+        host: "145.79.213.97",
+        user: "u541604210.asset.sunkarseekho.com",
         password: "Aidges@1011",
         secure: false
     },
