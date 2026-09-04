@@ -1,6 +1,16 @@
 const db = require('../config/db');
+const phoneValidator = require('../utils/phoneValidator');
 
 async function createOrder(data) {
+    // Final safety: olddata mobiles must NEVER be inserted
+    const phone = data.contactPhone || data.phone || data.mobile || '';
+    if (phone && await phoneValidator.isMobileBlocked(phone)) {
+        const err = new Error('Your order is already created');
+        err.code = 'ORDER_BLOCKED_OLDDATA';
+        err.alreadyExists = true;
+        throw err;
+    }
+
     const now = new Date();
     const [result] = await db.execute(
         `INSERT INTO orders

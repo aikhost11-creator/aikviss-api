@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline');
 const db = require('../config/db');
 
 class PhoneValidator {
@@ -8,119 +7,102 @@ class PhoneValidator {
         this.blockedMobilesSet = new Set();
         this.isLoaded = false;
         this.isLoading = false;
+        // Sync preload so first request never races
+        this.loadJsonSync();
     }
 
-    /**
-     * Normalize a phone number to standard 10-digit format
-     * Removes non-digits and extracts last 10 digits
-     */
     normalizePhone(phone) {
         if (!phone) return '';
         const digits = String(phone).replace(/\D/g, '');
-        if (digits.length >= 10) {
-            return digits.slice(-10);
-        }
+        if (digits.length >= 10) return digits.slice(-10);
         return digits;
     }
 
-    /**
-     * Initialize / load blocked numbers from CSV and Database
-     */
+    loadJsonSync() {
+        const jsonPaths = [
+            path.join(__dirname, '../data/blocked_mobiles.json'),
+            path.join(process.cwd(), 'data/blocked_mobiles.json'),
+            path.join(process.cwd(), 'API/data/blocked_mobiles.json'),
+        ];
+        const jsonPath = jsonPaths.find((p) => fs.existsSync(p));
+        if (!jsonPath) {
+            console.warn('[PhoneValidator] blocked_mobiles.json not found at startup');
+            return;
+        }
+        try {
+            const arr = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+            if (!Array.isArray(arr)) throw new Error('JSON must be an array');
+            for (const m of arr) {
+                const clean = this.normalizePhone(m);
+                if (clean && clean.length === 10) this.blockedMobilesSet.add(clean);
+            }
+            this.isLoaded = true;
+            console.log(`[PhoneValidator] Sync-loaded ${this.blockedMobilesSet.size} blocked mobiles from ${jsonPath}`);
+        } catch (e) {
+            console.error('[PhoneValidator] Failed to load JSON:', e.message);
+        }
+    }
+
     async init() {
         if (this.isLoaded || this.isLoading) return;
         this.isLoading = true;
-
         try {
-            console.log('[PhoneValidator] Initializing mobile number blacklist...');
+            if (this.blockedMobilesSet.size === 0) this.loadJsonSync();
 
-            // 1. Try loading from olddata.csv
-            const possibleCsvPaths = [
-                path.join(__dirname, '../../olddata.csv'),
-                path.join(__dirname, '../olddata.csv'),
-                path.join(process.cwd(), 'olddata.csv')
-            ];
-
-            let csvPath = possibleCsvPaths.find(p => fs.existsSync(p));
-
-            if (csvPath) {
-                console.log(`[PhoneValidator] Reading CSV from: ${csvPath}`);
-                const fileStream = fs.createReadStream(csvPath);
-                const rl = readline.createInterface({
-                    input: fileStream,
-                    crlfDelay: Infinity
-                });
-
-                for await (const line of rl) {
-                    const clean = this.normalizePhone(line.trim());
-                    if (clean && clean.length === 10) {
-                        this.blockedMobilesSet.add(clean);
-                    }
-                }
-                console.log(`[PhoneValidator] Loaded ${this.blockedMobilesSet.size} numbers from CSV.`);
-            }
-
-            // 2. Also try loading from old_data_mobiles table in DB if table exists
+            // DB supplement
             try {
                 const [rows] = await db.execute('SELECT mobile FROM old_data_mobiles');
                 let dbCount = 0;
                 for (const row of rows) {
                     const clean = this.normalizePhone(row.mobile);
-                    if (clean && clean.length === 10) {
-                        if (!this.blockedMobilesSet.has(clean)) {
-                            this.blockedMobilesSet.add(clean);
-                            dbCount++;
-                        }
+                    if (clean && clean.length === 10 && !this.blockedMobilesSet.has(clean)) {
+                        this.blockedMobilesSet.add(clean);
+                        dbCount++;
                     }
                 }
-                if (dbCount > 0) {
-                    console.log(`[PhoneValidator] Loaded ${dbCount} additional numbers from database.`);
-                }
-            } catch (dbErr) {
-                // Table might not exist yet during initial setup
-            }
+                if (dbCount > 0) console.log(`[PhoneValidator] +${dbCount} from old_data_mobiles table`);
+            } catch (_) { /* table may not exist */ }
 
             this.isLoaded = true;
-            console.log(`[PhoneValidator] Blacklist initialized with total ${this.blockedMobilesSet.size} numbers.`);
+            console.log(`[PhoneValidator] Ready — ${this.blockedMobilesSet.size} blocked numbers`);
         } catch (err) {
-            console.error('[PhoneValidator] Error initializing blacklist:', err.message);
+            console.error('[PhoneValidator] Init error:', err.message);
         } finally {
             this.isLoading = false;
         }
     }
 
     /**
-     * Check if a mobile number is blocked / present in olddata
+     * Returns true if this mobile is in olddata blacklist — order must NOT be inserted in DB
      */
     async isMobileBlocked(rawPhone) {
         if (!rawPhone) return false;
         const clean = this.normalizePhone(rawPhone);
         if (!clean || clean.length < 10) return false;
 
-        // Ensure blacklist is loaded
-        if (!this.isLoaded) {
+        if (!this.isLoaded || this.blockedMobilesSet.size === 0) {
             await this.init();
         }
 
-        // Check in-memory Set
-        if (this.blockedMobilesSet.has(clean)) {
-            return true;
-        }
+        if (this.blockedMobilesSet.has(clean)) return true;
 
-        // DB Fallback Check
+        // Live DB fallback
         try {
             const [rows] = await db.execute(
                 'SELECT 1 FROM old_data_mobiles WHERE mobile = ? OR mobile = ? LIMIT 1',
-                [rawPhone, clean]
+                [String(rawPhone), clean]
             );
             if (rows.length > 0) {
                 this.blockedMobilesSet.add(clean);
                 return true;
             }
-        } catch (err) {
-            // Ignore DB lookup error if table does not exist
-        }
+        } catch (_) {}
 
         return false;
+    }
+
+    getCount() {
+        return this.blockedMobilesSet.size;
     }
 }
 

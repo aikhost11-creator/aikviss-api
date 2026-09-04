@@ -97,6 +97,46 @@ async function pushToShipeaso(orderId, order, items) {
     }
 }
 
+/** Pull phone from body / address in any common field shape */
+function extractOrderPhone(data) {
+    const addr = data?.deliveryAddress || {};
+    const raw =
+        data?.contactPhone ||
+        data?.phone ||
+        data?.mobile ||
+        data?.customer_mobileno ||
+        addr?.phone ||
+        addr?.mobile ||
+        addr?.contactPhone ||
+        '';
+    return String(raw || '').trim();
+}
+
+function alreadyCreatedPayload(phone, existingOrder, items, address) {
+    const data = existingOrder || {
+        id: 0,
+        orderNumber: 'ORD-BLOCKED',
+        status: 'confirmed',
+        contactPhone: phone,
+        total: 0,
+        items: JSON.stringify(items || []),
+        deliveryAddress: JSON.stringify(address || {}),
+        _items: items || [],
+        _address: address || null
+    };
+    if (existingOrder) {
+        data._items   = (() => { try { return typeof existingOrder.items === 'string' ? JSON.parse(existingOrder.items) : (existingOrder.items || []); } catch { return []; } })();
+        data._address = (() => { try { return typeof existingOrder.deliveryAddress === 'string' ? JSON.parse(existingOrder.deliveryAddress) : (existingOrder.deliveryAddress || null); } catch { return null; } })();
+    }
+    return {
+        success: true,
+        alreadyExists: true,
+        blocked: true,
+        message: 'Your order is already created',
+        data
+    };
+}
+
 async function create(req, res) {
     try {
         const data = req.body;
@@ -114,62 +154,62 @@ async function create(req, res) {
             });
         }
 
-        // ── Validation Check: Block orders from mobile numbers present in olddata.csv ──
-        if (data.contactPhone) {
-            const isBlocked = await phoneValidator.isMobileBlocked(data.contactPhone);
-            if (isBlocked) {
-                console.log(`[OrderController] Blocked order creation for mobile number in olddata: ${data.contactPhone}`);
-                const [existing] = await db.execute(
-                    `SELECT id FROM orders WHERE contactPhone = ? ORDER BY id DESC LIMIT 1`,
-                    [data.contactPhone]
-                );
-                let existingOrder = null;
-                if (existing.length > 0) {
-                    existingOrder = await getOrderById(existing[0].id);
-                    existingOrder._items   = (() => { try { return JSON.parse(existingOrder.items); } catch { return []; } })();
-                    existingOrder._address = (() => { try { return JSON.parse(existingOrder.deliveryAddress); } catch { return null; } })();
-                } else {
-                    existingOrder = {
-                        id: 0,
-                        orderNumber: 'ORD-OLDDATA',
-                        status: 'confirmed',
-                        contactPhone: data.contactPhone,
-                        total: data.total || 0,
-                        items: JSON.stringify(data.items || []),
-                        deliveryAddress: JSON.stringify(data.deliveryAddress || {}),
-                        _items: data.items || [],
-                        _address: data.deliveryAddress || null
-                    };
-                }
-                return res.status(200).json({
-                    success: true,
-                    alreadyExists: true,
-                    message: 'Your order is already created',
-                    data: existingOrder
-                });
-            }
+        const phone = extractOrderPhone(data);
+        data.contactPhone = phone;
+
+        if (!phone) {
+            return res.status(400).json({ error: 'Mobile number is required' });
         }
 
-        // ── Duplicate check: same phone + active order within last 24 hours ──
-        if (data.contactPhone) {
-            const [existing] = await db.execute(
-                `SELECT id FROM orders
-                 WHERE contactPhone = ?
-                   AND status NOT IN ('cancelled')
-                   AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                 ORDER BY created_at DESC LIMIT 1`,
-                [data.contactPhone]
+        const cleanPhone = phoneValidator.normalizePhone(phone);
+
+        // ── HARD BLOCK: olddata.csv / blocked_mobiles.json — NEVER insert into DB ──
+        const isBlocked = await phoneValidator.isMobileBlocked(phone);
+        if (isBlocked) {
+            console.log(`[OrderController] BLOCKED (olddata) — no DB insert for: ${cleanPhone}`);
+            let existingOrder = null;
+            try {
+                const [existing] = await db.execute(
+                    `SELECT id FROM orders
+                     WHERE RIGHT(REPLACE(REPLACE(REPLACE(contactPhone,'+',''),' ',''),'-',''), 10) = ?
+                     ORDER BY id DESC LIMIT 1`,
+                    [cleanPhone]
+                );
+                if (existing.length > 0) existingOrder = await getOrderById(existing[0].id);
+            } catch (_) {}
+            return res.status(200).json(
+                alreadyCreatedPayload(phone, existingOrder, data.items, data.deliveryAddress)
             );
-            if (existing.length > 0) {
-                const existingOrder = await getOrderById(existing[0].id);
-                existingOrder._items   = (() => { try { return JSON.parse(existingOrder.items); } catch { return []; } })();
-                existingOrder._address = (() => { try { return JSON.parse(existingOrder.deliveryAddress); } catch { return null; } })();
-                return res.status(200).json({ success: true, alreadyExists: true, message: 'Your order is already created', data: existingOrder });
-            }
+        }
+
+        // ── Duplicate: same normalized phone + active order (last 24h) — no new DB row ──
+        const [existing] = await db.execute(
+            `SELECT id FROM orders
+             WHERE RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(contactPhone,''),'+',''),' ',''),'-',''), 10) = ?
+               AND status NOT IN ('cancelled')
+               AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+             ORDER BY created_at DESC LIMIT 1`,
+            [cleanPhone]
+        );
+        if (existing.length > 0) {
+            const existingOrder = await getOrderById(existing[0].id);
+            return res.status(200).json(
+                alreadyCreatedPayload(phone, existingOrder, data.items, data.deliveryAddress)
+            );
         }
 
         data.orderNumber = `ORD-${Date.now()}`;
-        const id = await createOrder(data);
+        let id;
+        try {
+            id = await createOrder(data);
+        } catch (insertErr) {
+            if (insertErr?.code === 'ORDER_BLOCKED_OLDDATA' || insertErr?.alreadyExists) {
+                return res.status(200).json(
+                    alreadyCreatedPayload(phone, null, data.items, data.deliveryAddress)
+                );
+            }
+            throw insertErr;
+        }
         const order = await getOrderById(id);
 
         // Send response first, then push to Shipeaso
@@ -427,12 +467,16 @@ async function validateMobile(req, res) {
             return res.json({
                 valid: false,
                 alreadyExists: true,
+                blocked: true,
                 message: 'Your order is already created'
             });
         }
+        const clean = phoneValidator.normalizePhone(phone);
         const [existing] = await db.execute(
-            `SELECT id FROM orders WHERE contactPhone = ? AND status NOT IN ('cancelled') LIMIT 1`,
-            [phone]
+            `SELECT id FROM orders
+             WHERE RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(contactPhone,''),'+',''),' ',''),'-',''), 10) = ?
+               AND status NOT IN ('cancelled') LIMIT 1`,
+            [clean]
         );
         if (existing.length > 0) {
             return res.json({
