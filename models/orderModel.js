@@ -207,4 +207,98 @@ async function getAllOrdersForExport(filters = {}) {
     return rows;
 }
 
-module.exports = { createOrder, getAllOrders, getAllOrdersForExport, saveShipeasoResponse, getOrderById, getOrdersByCustomerId, updateOrderStatus };
+/** Preview counts for permanent bulk delete by date range (inclusive, DATE only) */
+async function getDeletePreview(dateFrom, dateTo) {
+    const fromTs = `${dateFrom} 00:00:00`;
+    const toTs = `${dateTo} 23:59:59`;
+    const params = [fromTs, toTs];
+    const [rows] = await db.execute(
+        `SELECT
+            COUNT(*) AS total,
+            SUM(
+                CASE
+                    WHEN o.shipeaso_response IS NOT NULL
+                     AND o.shipeaso_response != ''
+                     AND JSON_UNQUOTE(JSON_EXTRACT(o.shipeaso_response, '$.error')) IS NULL
+                    THEN 1 ELSE 0
+                END
+            ) AS synced,
+            SUM(
+                CASE
+                    WHEN o.shipeaso_response IS NULL
+                      OR o.shipeaso_response = ''
+                      OR JSON_UNQUOTE(JSON_EXTRACT(o.shipeaso_response, '$.error')) IS NOT NULL
+                    THEN 1 ELSE 0
+                END
+            ) AS unsynced,
+            COALESCE(SUM(o.total), 0) AS totalAmount
+         FROM orders o
+         WHERE o.created_at >= ?
+           AND o.created_at <= ?`,
+        params
+    );
+    const r = rows[0] || {};
+    return {
+        total: Number(r.total || 0),
+        synced: Number(r.synced || 0),
+        unsynced: Number(r.unsynced || 0),
+        totalAmount: Number(r.totalAmount || 0),
+        dateFrom,
+        dateTo
+    };
+}
+
+/** Permanently delete ALL orders in date range — hard DELETE from DB */
+async function bulkDeleteByDateRange(dateFrom, dateTo) {
+    const fromTs = `${dateFrom} 00:00:00`;
+    const toTs = `${dateTo} 23:59:59`;
+
+    const [countRows] = await db.execute(
+        `SELECT COUNT(*) AS total FROM orders
+         WHERE created_at >= ? AND created_at <= ?`,
+        [fromTs, toTs]
+    );
+    const toDelete = Number(countRows[0]?.total || 0);
+    if (toDelete === 0) {
+        return { deleted: 0, remaining: 0 };
+    }
+
+    // Delete in batches so large ranges don't lock forever / timeout
+    let deleted = 0;
+    let safety = 0;
+    while (safety < 500) {
+        safety++;
+        const [result] = await db.execute(
+            `DELETE FROM orders
+             WHERE created_at >= ? AND created_at <= ?
+             LIMIT 2000`,
+            [fromTs, toTs]
+        );
+        const n = result.affectedRows || 0;
+        deleted += n;
+        if (n === 0) break;
+    }
+
+    const [leftRows] = await db.execute(
+        `SELECT COUNT(*) AS remaining FROM orders
+         WHERE created_at >= ? AND created_at <= ?`,
+        [fromTs, toTs]
+    );
+
+    return {
+        deleted,
+        remaining: Number(leftRows[0]?.remaining || 0)
+    };
+}
+
+module.exports = {
+    createOrder,
+    getAllOrders,
+    getAllOrdersForExport,
+    saveShipeasoResponse,
+    getOrderById,
+    getOrdersByCustomerId,
+    updateOrderStatus,
+    getDeletePreview,
+    bulkDeleteByDateRange
+};

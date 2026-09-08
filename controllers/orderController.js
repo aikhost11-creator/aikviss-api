@@ -1,4 +1,4 @@
-const { createOrder, getAllOrders, getAllOrdersForExport, saveShipeasoResponse, getOrderById, getOrdersByCustomerId, updateOrderStatus } = require('../models/orderModel');
+const { createOrder, getAllOrders, getAllOrdersForExport, saveShipeasoResponse, getOrderById, getOrdersByCustomerId, updateOrderStatus, getDeletePreview, bulkDeleteByDateRange } = require('../models/orderModel');
 const axios = require('axios');
 const db    = require('../config/db');
 const phoneValidator = require('../utils/phoneValidator');
@@ -492,5 +492,77 @@ async function validateMobile(req, res) {
     }
 }
 
-module.exports = { create, getAll, getById, getByCustomer, updateStatus, exportCSV, resyncShipeaso, getUnsyncedOrders, syncAllUnsynced, validateMobile };
+function isPastOrTodayDate(ymd) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd || '')) return false;
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+    // Only past dates allowed (strictly before today)
+    return ymd < todayStr;
+}
+
+async function deleteOrdersPreview(req, res) {
+    try {
+        const dateFrom = String(req.query.dateFrom || '').trim();
+        const dateTo = String(req.query.dateTo || '').trim();
+        if (!dateFrom || !dateTo) {
+            return res.status(400).json({ error: 'dateFrom and dateTo are required (YYYY-MM-DD)' });
+        }
+        if (!isPastOrTodayDate(dateFrom) || !isPastOrTodayDate(dateTo)) {
+            return res.status(400).json({ error: 'Only past dates are allowed' });
+        }
+        if (dateFrom > dateTo) {
+            return res.status(400).json({ error: 'dateFrom cannot be after dateTo' });
+        }
+        const preview = await getDeletePreview(dateFrom, dateTo);
+        res.json({ success: true, data: preview });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+
+async function bulkDeleteOrders(req, res) {
+    try {
+        const dateFrom = String(req.body.dateFrom || '').trim();
+        const dateTo = String(req.body.dateTo || '').trim();
+        const confirmText = String(req.body.confirmText || '').trim();
+
+        if (!dateFrom || !dateTo) {
+            return res.status(400).json({ error: 'dateFrom and dateTo are required' });
+        }
+        if (!isPastOrTodayDate(dateFrom) || !isPastOrTodayDate(dateTo)) {
+            return res.status(400).json({ error: 'Only past dates are allowed' });
+        }
+        if (dateFrom > dateTo) {
+            return res.status(400).json({ error: 'dateFrom cannot be after dateTo' });
+        }
+        if (confirmText !== 'DELETE') {
+            return res.status(400).json({ error: 'Type DELETE to confirm permanent deletion' });
+        }
+
+        const result = await bulkDeleteByDateRange(dateFrom, dateTo);
+        if (result.remaining > 0) {
+            // Retry once if any left (edge case)
+            const retry = await bulkDeleteByDateRange(dateFrom, dateTo);
+            result.deleted += retry.deleted;
+            result.remaining = retry.remaining;
+        }
+
+        console.log(`[BulkDelete] ${dateFrom} → ${dateTo}: deleted=${result.deleted}, remaining=${result.remaining}`);
+        res.json({
+            success: true,
+            message: result.remaining === 0
+                ? `Permanently deleted ${result.deleted} order(s)`
+                : `Deleted ${result.deleted} but ${result.remaining} still remain — try again`,
+            data: result
+        });
+    } catch (err) {
+        console.error('[BulkDelete] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+module.exports = { create, getAll, getById, getByCustomer, updateStatus, exportCSV, resyncShipeaso, getUnsyncedOrders, syncAllUnsynced, validateMobile, deleteOrdersPreview, bulkDeleteOrders };
 
