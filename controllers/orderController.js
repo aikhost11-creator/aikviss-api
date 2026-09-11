@@ -46,7 +46,18 @@ async function pushToShipeaso(orderId, order, items) {
             }
             if (!skuCode) skuCode = productData.sku || String(item.id);
 
-            const productName = item.name || productData.name || '';
+            const baseName = item.name || productData.name || '';
+            // Build "Product Name -- Variant" for Shipeaso (e.g. "Track pant -- XXL")
+            let variantLabel = '';
+            if (item.selectedOptions && typeof item.selectedOptions === 'object') {
+                const vals = Object.values(item.selectedOptions)
+                    .map(v => String(v || '').trim())
+                    .filter(Boolean);
+                if (vals.length) variantLabel = vals.join(' / ');
+            }
+            const productName = variantLabel
+                ? `${baseName} -- ${variantLabel}`
+                : baseName;
 
             LOG(`Item ${item.id} (${productName}) → SKU: ${skuCode}`, { selectedOptions: item.selectedOptions });
 
