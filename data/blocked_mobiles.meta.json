@@ -1,30 +1,8 @@
 {
-  "generatedAt": "2026-09-23T14:58:38.270Z",
-  "totalUnique": 256784,
-  "sources": [
-    {
-      "source": "existing blocked_mobiles.json",
-      "path": "G:\\AIDGES INFOTECH\\ALPHA FULFILL\\API\\data\\blocked_mobiles.json",
-      "before": 0,
-      "after": 23678,
-      "added": 23678,
-      "skippedInvalid": 0
-    },
-    {
-      "source": "olddata.csv",
-      "path": "G:\\AIDGES INFOTECH\\ALPHA FULFILL\\olddata.csv",
-      "before": 23678,
-      "after": 23678,
-      "added": 0,
-      "skippedInvalid": 11
-    },
-    {
-      "source": "new-mobile.csv",
-      "path": "G:\\AIDGES INFOTECH\\ALPHA FULFILL\\new-mobile.csv",
-      "before": 23678,
-      "after": 256784,
-      "added": 233106,
-      "skippedInvalid": 8716
-    }
-  ]
+  "generatedAt": "2026-09-24T16:55:20.853Z",
+  "source": "final.csv",
+  "mode": "replace",
+  "totalUnique": 120184,
+  "skippedInvalid": 1315,
+  "note": "Only final.csv numbers — previous lists replaced"
 }
