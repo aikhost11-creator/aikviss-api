@@ -5,7 +5,9 @@ set -euo pipefail
 ROOT="${MULTISHOP_ROOT:-/var/www/multishop}"
 ADMIN_SRC="$ROOT/sources/admin"
 API_SRC="$ROOT/sources/api"
-TENANTS_JSON="$API_SRC/deploy/multishop/tenants.json"
+TENANTS_JSON="${TENANTS_JSON:-$ROOT/tenants.json}"
+[ -f "$TENANTS_JSON" ] || TENANTS_JSON="$API_SRC/deploy/multishop/tenants.json"
+echo "Tenants: $TENANTS_JSON"
 
 cd "$ADMIN_SRC"
 git fetch origin

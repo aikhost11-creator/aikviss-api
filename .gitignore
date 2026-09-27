@@ -8,6 +8,7 @@ stderr.log
 orders-logs/
 tmp/
 logs/
+ecosystem.multishop.config.js*
 .DS_Store
 Thumbs.db
 .vscode/
