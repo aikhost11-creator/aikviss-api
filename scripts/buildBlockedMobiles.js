@@ -1,6 +1,10 @@
 /**
- * Rebuild API/data/blocked_mobiles.json from final.csv ONLY (replace mode).
- * Usage: node scripts/buildBlockedMobiles.js
+ * Add numbers from CSV file(s) to API/data/blocked_mobiles.json (merge mode).
+ * Existing blocked numbers are always kept; only new numbers are added.
+ *
+ * Usage (from API/):
+ *   node scripts/buildBlockedMobiles.js                 -> merges ../ordata.csv
+ *   node scripts/buildBlockedMobiles.js a.csv b.csv     -> merges the given CSVs
  */
 const fs = require('fs');
 const path = require('path');
@@ -10,14 +14,11 @@ const outDir = path.join(__dirname, '../data');
 const outJson = path.join(outDir, 'blocked_mobiles.json');
 const outMeta = path.join(outDir, 'blocked_mobiles.meta.json');
 
-const csvCandidates = [
-    path.join(root, 'final.csv'),
-    path.join(process.cwd(), 'final.csv'),
-];
-const csvPath = csvCandidates.find((p) => fs.existsSync(p));
-if (!csvPath) {
-    console.error('final.csv not found');
-    process.exit(1);
+function resolveCsv(name) {
+    const candidates = path.isAbsolute(name)
+        ? [name]
+        : [path.join(process.cwd(), name), path.join(root, name)];
+    return candidates.find((p) => fs.existsSync(p));
 }
 
 function normalize(phone) {
@@ -26,28 +27,75 @@ function normalize(phone) {
     return '';
 }
 
-const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/);
+const csvNames = process.argv.slice(2).length ? process.argv.slice(2) : ['ordata.csv'];
+const csvPaths = csvNames.map((n) => {
+    const p = resolveCsv(n);
+    if (!p) {
+        console.error(`${n} not found`);
+        process.exit(1);
+    }
+    return p;
+});
+
 const set = new Set();
-let skipped = 0;
-for (let i = 1; i < lines.length; i++) {
-    const clean = normalize(lines[i]);
-    if (clean.length === 10) set.add(clean);
-    else if (String(lines[i] || '').trim()) skipped++;
+if (fs.existsSync(outJson)) {
+    for (const n of JSON.parse(fs.readFileSync(outJson, 'utf8'))) {
+        const clean = normalize(n);
+        if (clean.length === 10) set.add(clean);
+    }
+}
+const existingCount = set.size;
+
+const sources = [];
+for (const csvPath of csvPaths) {
+    const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/);
+    let valid = 0;
+    let skipped = 0;
+    const before = set.size;
+    for (let i = 0; i < lines.length; i++) {
+        const raw = String(lines[i] || '').trim();
+        if (!raw) continue;
+        const clean = normalize(raw);
+        if (clean.length === 10) {
+            set.add(clean);
+            valid++;
+        } else if (i > 0) {
+            skipped++;
+        }
+    }
+    sources.push({
+        file: path.basename(csvPath),
+        validRows: valid,
+        newlyAdded: set.size - before,
+        skippedInvalid: skipped,
+    });
 }
 
 const arr = [...set].sort();
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outJson, JSON.stringify(arr));
+
+const prevMeta = fs.existsSync(outMeta) ? JSON.parse(fs.readFileSync(outMeta, 'utf8')) : {};
 fs.writeFileSync(
     outMeta,
     JSON.stringify({
         generatedAt: new Date().toISOString(),
-        source: csvPath,
-        mode: 'replace',
+        mode: 'merge',
+        previousTotal: existingCount,
         totalUnique: arr.length,
-        skippedInvalid: skipped,
-        note: 'Only final.csv numbers — previous lists replaced',
+        added: arr.length - existingCount,
+        sources,
+        history: [...(prevMeta.history || []), {
+            at: prevMeta.generatedAt,
+            mode: prevMeta.mode,
+            source: prevMeta.source || (prevMeta.sources || []).map((s) => s.file).join(', '),
+            totalUnique: prevMeta.totalUnique,
+        }].filter((h) => h.at),
     }, null, 2)
 );
 
-console.log(`Wrote ${arr.length} numbers → data/blocked_mobiles.json (skipped ${skipped})`);
+console.log(`Existing: ${existingCount}`);
+for (const s of sources) {
+    console.log(`${s.file}: ${s.validRows} valid rows, ${s.newlyAdded} new, ${s.skippedInvalid} skipped`);
+}
+console.log(`Total now: ${arr.length} → data/blocked_mobiles.json`);

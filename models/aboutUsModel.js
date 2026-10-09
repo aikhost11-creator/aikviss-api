@@ -56,13 +56,13 @@ const AboutUs = {
         if (existing.length > 0) {
             await db.execute(
                 `UPDATE about_us SET bannerImage=?,tagline=?,storyTitle=?,storyText=?,storyImage=?,
-                 vision=?,mission=?,values=?,stats=?,teamTitle=?,team=?,updated_at=? WHERE id=?`,
+                 vision=?,mission=?,\`values\`=?,stats=?,teamTitle=?,team=?,updated_at=? WHERE id=?`,
                 [...vals, existing[0].id]
             );
         } else {
             await db.execute(
                 `INSERT INTO about_us (bannerImage,tagline,storyTitle,storyText,storyImage,
-                 vision,mission,values,stats,teamTitle,team,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                 vision,mission,\`values\`,stats,teamTitle,team,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
                 vals
             );
         }

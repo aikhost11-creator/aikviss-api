@@ -98,7 +98,8 @@ while IFS= read -r row; do
     echo "   $DOMAIN: keeping existing .env"
   else
     DB_USER="${ID}_user"
-    DB_PASS=$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 20)
+    # Upper + lower + digit + special so MySQL validate_password (MEDIUM) accepts it; no '#' (dotenv comment)
+    DB_PASS="Ak9_$(openssl rand -hex 10)Zx"
     cat > "$ENV_FILE" <<EOF
 DB_HOST=127.0.0.1
 DB_PORT=3306

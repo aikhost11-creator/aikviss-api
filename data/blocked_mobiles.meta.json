@@ -1,8 +1,23 @@
 {
-  "generatedAt": "2026-09-24T16:55:20.853Z",
-  "source": "final.csv",
-  "mode": "replace",
-  "totalUnique": 120184,
-  "skippedInvalid": 1315,
-  "note": "Only final.csv numbers — previous lists replaced"
+  "generatedAt": "2026-10-09T16:43:20.934Z",
+  "mode": "merge",
+  "previousTotal": 120184,
+  "totalUnique": 207639,
+  "added": 87455,
+  "sources": [
+    {
+      "file": "ordata.csv",
+      "validRows": 222812,
+      "newlyAdded": 87455,
+      "skippedInvalid": 9
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-24T16:55:20.853Z",
+      "mode": "replace",
+      "source": "final.csv",
+      "totalUnique": 120184
+    }
+  ]
 }

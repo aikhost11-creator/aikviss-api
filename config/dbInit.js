@@ -105,83 +105,17 @@ const tables = [
         `
     },
 
-    // CATEGORIES: add image column if missing
-    {
-        name: 'categories_image_col',
-        sql: `
-            ALTER TABLE \`categories\`
-            ADD COLUMN IF NOT EXISTS \`image\` VARCHAR(500) DEFAULT NULL
-            AFTER \`name\`;
-        `
-    },
-
-    // SITECONFIG: add currency column if missing
-    {
-        name: 'siteconfig_currency_col',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`currency\` VARCHAR(10) NOT NULL DEFAULT '£'
-            AFTER \`email\`;
-        `
-    },
-
-    // SITECONFIG: add deliveryCharge column if missing
-    {
-        name: 'siteconfig_delivery_col',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`deliveryCharge\` DECIMAL(10,2) NOT NULL DEFAULT 20.00
-            AFTER \`currency\`;
-        `
-    },
-
-    // SITECONFIG: add primaryColor column if missing
-    {
-        name: 'siteconfig_primaryColor_col',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`primaryColor\` VARCHAR(20) NOT NULL DEFAULT '#7b10b9'
-            AFTER \`deliveryCharge\`;
-        `
-    },
-
-    // SITECONFIG: add marqueeItems column if missing
-    {
-        name: 'siteconfig_marqueeItems_col',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`marqueeItems\` JSON DEFAULT NULL
-            AFTER \`primaryColor\`;
-        `
-    },
-
-    // SITECONFIG: add metaPixelId column if missing
-    {
-        name: 'siteconfig_metaPixelId_col',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`metaPixelId\` VARCHAR(50) DEFAULT NULL
-            AFTER \`marqueeItems\`;
-        `
-    },
-
-    // ABANDON CHECKOUTS: rename firstName/lastName to name if needed
-    {
-        name: 'abandon_checkouts_name_col',
-        sql: `
-            ALTER TABLE \`abandon_checkouts\`
-            ADD COLUMN IF NOT EXISTS \`name\` VARCHAR(200) DEFAULT NULL AFTER \`sessionId\`;
-        `
-    },
-
-    // PRODUCTS: add isFeatured column if missing
-    { name: 'products_isFeatured_col', sql: "ALTER TABLE `products` ADD COLUMN `isFeatured` TINYINT(1) NOT NULL DEFAULT 0 AFTER `isActive`" },
-
-    // PRODUCTS: add promoReel column if missing
-    { name: 'products_promoReel_col', sql: "ALTER TABLE `products` ADD COLUMN `promoReel` VARCHAR(500) DEFAULT NULL AFTER `promoImage`" },
-
-    // PRODUCTS: add sizeGuideImage column if missing
-    { name: 'products_sizeGuideImage_col', sql: "ALTER TABLE `products` ADD COLUMN `sizeGuideImage` VARCHAR(500) DEFAULT NULL AFTER `galleryMedia`" },
+    // Column migrations use plain ADD COLUMN (MySQL 8 has no ADD COLUMN IF NOT EXISTS);
+    // ER_DUP_FIELDNAME on re-run is ignored in initDB().
+    { name: 'categories_image_col',             sql: "ALTER TABLE `categories` ADD COLUMN `image` VARCHAR(500) DEFAULT NULL AFTER `name`" },
+    { name: 'siteconfig_currency_col',          sql: "ALTER TABLE `siteconfig` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT '₹' AFTER `email`" },
+    { name: 'siteconfig_delivery_col',          sql: "ALTER TABLE `siteconfig` ADD COLUMN `deliveryCharge` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `currency`" },
+    { name: 'siteconfig_primaryColor_col',      sql: "ALTER TABLE `siteconfig` ADD COLUMN `primaryColor` VARCHAR(20) NOT NULL DEFAULT '#7b10b9' AFTER `deliveryCharge`" },
+    { name: 'siteconfig_marqueeItems_col',      sql: "ALTER TABLE `siteconfig` ADD COLUMN `marqueeItems` JSON DEFAULT NULL AFTER `primaryColor`" },
+    { name: 'siteconfig_metaPixelId_col',       sql: "ALTER TABLE `siteconfig` ADD COLUMN `metaPixelId` VARCHAR(50) DEFAULT NULL AFTER `marqueeItems`" },
+    { name: 'siteconfig_buyNowText_col',        sql: "ALTER TABLE `siteconfig` ADD COLUMN `buyNowText` VARCHAR(100) DEFAULT 'BUY NOW' AFTER `metaPixelId`" },
+    { name: 'siteconfig_buyNowSubtext_col',     sql: "ALTER TABLE `siteconfig` ADD COLUMN `buyNowSubtext` VARCHAR(200) DEFAULT NULL AFTER `buyNowText`" },
+    { name: 'siteconfig_metaAccessToken_col',   sql: "ALTER TABLE `siteconfig` ADD COLUMN `metaAccessToken` VARCHAR(500) DEFAULT NULL AFTER `buyNowSubtext`" },
 
     // ABANDON CHECKOUTS
     {
@@ -387,20 +321,14 @@ const tables = [
         `
     },
 
-    // PAYMENT SETTINGS: add PhonePe columns if missing
-    {
-        name: 'payment_settings_phonepe',
-        sql: `
-            ALTER TABLE \`payment_settings\`
-            ADD COLUMN IF NOT EXISTS \`phonepeMerchantId\`  VARCHAR(255) DEFAULT NULL AFTER \`razorpayKeySecret\`,
-            ADD COLUMN IF NOT EXISTS \`phonepeApiKey\`      VARCHAR(500) DEFAULT NULL AFTER \`phonepeMerchantId\`,
-            ADD COLUMN IF NOT EXISTS \`phonepeSaltIndex\`   VARCHAR(10)  DEFAULT '1'  AFTER \`phonepeApiKey\`,
-            ADD COLUMN IF NOT EXISTS \`phonepeSaltKey\`     VARCHAR(500) DEFAULT NULL AFTER \`phonepeSaltIndex\`,
-            ADD COLUMN IF NOT EXISTS \`phonepeMerchantUserId\` VARCHAR(255) DEFAULT NULL AFTER \`phonepeSaltKey\`,
-            ADD COLUMN IF NOT EXISTS \`phonepeIsActive\`    TINYINT(1)   NOT NULL DEFAULT 0 AFTER \`phonepeMerchantUserId\`,
-            ADD COLUMN IF NOT EXISTS \`codIsActive\`        TINYINT(1)   NOT NULL DEFAULT 0 AFTER \`phonepeIsActive\`;
-        `
-    },
+    // PAYMENT SETTINGS: PhonePe + COD columns
+    { name: 'payment_settings_phonepeMerchantId',     sql: "ALTER TABLE `payment_settings` ADD COLUMN `phonepeMerchantId` VARCHAR(255) DEFAULT NULL AFTER `razorpayKeySecret`" },
+    { name: 'payment_settings_phonepeApiKey',         sql: "ALTER TABLE `payment_settings` ADD COLUMN `phonepeApiKey` VARCHAR(500) DEFAULT NULL AFTER `phonepeMerchantId`" },
+    { name: 'payment_settings_phonepeSaltIndex',      sql: "ALTER TABLE `payment_settings` ADD COLUMN `phonepeSaltIndex` VARCHAR(10) DEFAULT '1' AFTER `phonepeApiKey`" },
+    { name: 'payment_settings_phonepeSaltKey',        sql: "ALTER TABLE `payment_settings` ADD COLUMN `phonepeSaltKey` VARCHAR(500) DEFAULT NULL AFTER `phonepeSaltIndex`" },
+    { name: 'payment_settings_phonepeMerchantUserId', sql: "ALTER TABLE `payment_settings` ADD COLUMN `phonepeMerchantUserId` VARCHAR(255) DEFAULT NULL AFTER `phonepeSaltKey`" },
+    { name: 'payment_settings_phonepeIsActive',       sql: "ALTER TABLE `payment_settings` ADD COLUMN `phonepeIsActive` TINYINT(1) NOT NULL DEFAULT 0 AFTER `phonepeMerchantUserId`" },
+    { name: 'payment_settings_codIsActive',           sql: "ALTER TABLE `payment_settings` ADD COLUMN `codIsActive` TINYINT(1) NOT NULL DEFAULT 0 AFTER `phonepeIsActive`" },
 
     // ORDERS
     {
@@ -506,15 +434,9 @@ const tables = [
     },
 
     // ORDERS: allow guest orders (nullable customerId + guest fields)
-    {
-        name: 'orders_guest_cols',
-        sql: `
-            ALTER TABLE \`orders\`
-            MODIFY COLUMN \`customerId\` INT(11) DEFAULT NULL,
-            ADD COLUMN IF NOT EXISTS \`guestName\`  VARCHAR(200) DEFAULT NULL AFTER \`contactPhone\`,
-            ADD COLUMN IF NOT EXISTS \`guestEmail\` VARCHAR(255) DEFAULT NULL AFTER \`guestName\`;
-        `
-    },
+    { name: 'orders_customerId_nullable', sql: "ALTER TABLE `orders` MODIFY COLUMN `customerId` INT(11) DEFAULT NULL" },
+    { name: 'orders_guestName_col',       sql: "ALTER TABLE `orders` ADD COLUMN `guestName` VARCHAR(200) DEFAULT NULL AFTER `contactPhone`" },
+    { name: 'orders_guestEmail_col',      sql: "ALTER TABLE `orders` ADD COLUMN `guestEmail` VARCHAR(255) DEFAULT NULL AFTER `guestName`" },
 
     // ORDERS: add shipeaso_response column
     { name: 'orders_shipeaso_col', sql: "ALTER TABLE `orders` ADD COLUMN `shipeaso_response` TEXT DEFAULT NULL AFTER `notes`" },
@@ -558,26 +480,6 @@ const tables = [
         `
     },
 
-    // SITECONFIG: add metaAccessToken column if missing
-    {
-        name: 'siteconfig_metaAccessToken_col',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`metaAccessToken\` VARCHAR(500) DEFAULT NULL
-            AFTER \`metaPixelId\`;
-        `
-    },
-
-    // SITECONFIG: add buyNow text columns if missing
-    {
-        name: 'siteconfig_buynow_cols',
-        sql: `
-            ALTER TABLE \`siteconfig\`
-            ADD COLUMN IF NOT EXISTS \`buyNowText\`    VARCHAR(100) DEFAULT 'BUY NOW' AFTER \`metaPixelId\`,
-            ADD COLUMN IF NOT EXISTS \`buyNowSubtext\` VARCHAR(200) DEFAULT NULL      AFTER \`buyNowText\`;
-        `
-    },
-
     // REELS
     {
         name: 'reels',
@@ -615,6 +517,199 @@ const tables = [
 
 const phoneValidator = require('../utils/phoneValidator');
 
+function siteNameFromDomain() {
+    const domain = String(process.env.SHOP_DOMAIN || '').trim();
+    const base = domain.split('.')[0] || 'Store';
+    return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+const DEFAULT_MARQUEE = [
+    { emoji: '🚚', text: 'Free shipping on every order' },
+    { emoji: '💵', text: 'Cash on Delivery available' },
+    { emoji: '🔒', text: '100% secure checkout' },
+    { emoji: '⭐', text: 'Loved by thousands of happy customers' }
+];
+
+const DEFAULT_LEGAL = [
+    {
+        slug: 'shipping-policy',
+        title: 'Shipping Policy',
+        content: `<h3>Shipping Policy</h3>
+<p>We ship to all serviceable pin codes across India. Shipping is free on every order.</p>
+<ul>
+<li>Orders are processed within 1-2 business days.</li>
+<li>Delivery usually takes 4-8 business days depending on your location.</li>
+<li>Once shipped, tracking details are shared on your registered mobile number.</li>
+</ul>
+<p>Delivery timelines may vary during sales, festivals or due to courier / weather delays.</p>`
+    },
+    {
+        slug: 'return-refund',
+        title: 'Return & Refund Policy',
+        content: `<h3>Return & Refund Policy</h3>
+<p>If you receive a damaged, defective or wrong product, contact us within 7 days of delivery with your order number and photos of the product.</p>
+<ul>
+<li>Products must be unused and in original packaging.</li>
+<li>After verification, we will arrange a replacement or refund.</li>
+<li>Refunds for prepaid orders are credited to the original payment method within 5-7 business days.</li>
+<li>For Cash on Delivery orders, refunds are processed via bank transfer / UPI.</li>
+</ul>`
+    },
+    {
+        slug: 'privacy-policy',
+        title: 'Privacy Policy',
+        content: `<h3>Privacy Policy</h3>
+<p>We collect only the information needed to process and deliver your order, such as your name, phone number, email and shipping address.</p>
+<ul>
+<li>Your information is used only for order processing, delivery and customer support.</li>
+<li>We share delivery details only with our logistics / courier partners.</li>
+<li>Online payments are processed by secure payment gateways; we do not store card details.</li>
+</ul>
+<p>By using this website, you agree to this privacy policy.</p>`
+    },
+    {
+        slug: 'terms-conditions',
+        title: 'Terms & Conditions',
+        content: `<h3>Terms & Conditions</h3>
+<p>By accessing and placing an order on this website, you agree to the following terms.</p>
+<ul>
+<li>All prices are in Indian Rupees (₹) and inclusive of applicable taxes.</li>
+<li>Product images are for representation; actual colour may vary slightly.</li>
+<li>We reserve the right to cancel orders in case of pricing errors, stock unavailability or suspected misuse.</li>
+<li>These terms may be updated at any time without prior notice.</li>
+</ul>`
+    }
+];
+
+const DEFAULT_FAQS = [
+    {
+        topic: 'Orders & Delivery',
+        faqs: [
+            ['How long does delivery take?', 'Orders are usually delivered within 4-8 business days, depending on your location.'],
+            ['Is shipping free?', 'Yes, shipping is free on every order.'],
+            ['How can I track my order?', 'Once your order is shipped, tracking details are sent to your registered mobile number.']
+        ]
+    },
+    {
+        topic: 'Payments',
+        faqs: [
+            ['Is Cash on Delivery available?', 'Yes, Cash on Delivery is available on all serviceable pin codes.'],
+            ['Is online payment safe?', 'Yes, all online payments are processed through secure, encrypted payment gateways.']
+        ]
+    },
+    {
+        topic: 'Returns & Refunds',
+        faqs: [
+            ['What if I receive a damaged or wrong product?', 'Contact us within 7 days of delivery with your order number and photos, and we will arrange a replacement or refund.'],
+            ['When will I get my refund?', 'Refunds are processed within 5-7 business days after the return is verified.']
+        ]
+    }
+];
+
+const DEFAULT_ABOUT = {
+    tagline: 'Our Story, Our Mission',
+    storyTitle: 'Who We Are',
+    storyText: 'We are a brand built on passion, quality, and care.',
+    vision: 'To be the most trusted brand in every home.',
+    mission: 'To deliver premium quality products that make everyday life better.',
+    values: [
+        { icon: '✨', title: 'Quality', text: 'We never compromise on quality.' },
+        { icon: '💚', title: 'Care', text: 'Every product is made with care.' },
+        { icon: '🌿', title: 'Sustainability', text: 'We care for the planet.' },
+        { icon: '🤝', title: 'Trust', text: 'Built on trust, one customer at a time.' }
+    ],
+    stats: [
+        { number: '1M+', label: 'Happy Customers' },
+        { number: '500+', label: 'Products' },
+        { number: '10+', label: 'Years of Excellence' },
+        { number: '24/7', label: 'Customer Support' }
+    ],
+    teamTitle: 'Meet Our Team'
+};
+
+async function isEmpty(table) {
+    const [rows] = await db.query(`SELECT COUNT(*) AS c FROM \`${table}\``);
+    return Number(rows[0].c) === 0;
+}
+
+// Inserts default rows only into empty tables, so admin edits are never overwritten.
+async function seedDefaults() {
+    const steps = [
+        ['siteconfig', async () => {
+            if (!(await isEmpty('siteconfig'))) return;
+            await db.query(
+                `INSERT INTO siteconfig
+                    (id, siteName, clientUrl, logo, whiteLogo, icon, mobile, email,
+                     currency, deliveryCharge, primaryColor, marqueeItems, buyNowText, buyNowSubtext,
+                     created_at, updated_at)
+                 VALUES (1, ?, ?, NULL, NULL, NULL, NULL, NULL, '₹', 0, '#7b10b9', ?, 'BUY NOW', NULL, NOW(), NOW())`,
+                [
+                    siteNameFromDomain(),
+                    process.env.SHOP_DOMAIN ? `https://${process.env.SHOP_DOMAIN}` : null,
+                    JSON.stringify(DEFAULT_MARQUEE)
+                ]
+            );
+        }],
+        ['payment_settings', async () => {
+            if (!(await isEmpty('payment_settings'))) return;
+            await db.query(
+                `INSERT INTO payment_settings
+                    (razorpayKeyId, razorpayKeySecret, isTestMode, isActive,
+                     phonepeSaltIndex, phonepeIsActive, codIsActive, created_at, updated_at)
+                 VALUES (NULL, NULL, 1, 0, '1', 0, 1, NOW(), NOW())`
+            );
+        }],
+        ['faq_config', async () => {
+            if (!(await isEmpty('faq_config'))) return;
+            await db.query(`INSERT INTO faq_config (pageTitle, bannerImage, updated_at) VALUES ('FAQs', NULL, NOW())`);
+        }],
+        ['faqs', async () => {
+            if (!(await isEmpty('faq_topics')) || !(await isEmpty('faqs'))) return;
+            for (const [ti, t] of DEFAULT_FAQS.entries()) {
+                const [res] = await db.query(
+                    `INSERT INTO faq_topics (name, sortOrder, isActive, created_at, updated_at) VALUES (?, ?, 1, NOW(), NOW())`,
+                    [t.topic, ti + 1]
+                );
+                for (const [fi, [q, a]] of t.faqs.entries()) {
+                    await db.query(
+                        `INSERT INTO faqs (topicId, question, answer, sortOrder, isActive, created_at, updated_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())`,
+                        [res.insertId, q, a, fi + 1]
+                    );
+                }
+            }
+        }],
+        ['legal_pages', async () => {
+            for (const p of DEFAULT_LEGAL) {
+                await db.query(
+                    `INSERT IGNORE INTO legal_pages (slug, title, content, updated_at) VALUES (?, ?, ?, NOW())`,
+                    [p.slug, p.title, p.content]
+                );
+            }
+        }],
+        ['about_us', async () => {
+            if (!(await isEmpty('about_us'))) return;
+            const a = DEFAULT_ABOUT;
+            await db.query(
+                `INSERT INTO about_us
+                    (bannerImage, tagline, storyTitle, storyText, storyImage, vision, mission,
+                     \`values\`, stats, teamTitle, team, updated_at)
+                 VALUES (NULL, ?, ?, ?, NULL, ?, ?, ?, ?, ?, '[]', NOW())`,
+                [a.tagline, a.storyTitle, a.storyText, a.vision, a.mission,
+                 JSON.stringify(a.values), JSON.stringify(a.stats), a.teamTitle]
+            );
+        }]
+    ];
+
+    for (const [name, run] of steps) {
+        try {
+            await run();
+        } catch (err) {
+            console.error(`   Seed failed: ${name} - ${err.message}`);
+        }
+    }
+    console.log('Default data check complete.\n');
+}
+
 async function initDB() {
     console.log('Checking database tables...');
     for (const table of tables) {
@@ -631,6 +726,8 @@ async function initDB() {
         }
     }
     console.log('Database init complete.\n');
+
+    await seedDefaults();
 
     // Initialize phone validator blacklist in background
     phoneValidator.init().catch(err => console.error('[PhoneValidator] Failed to initialize:', err.message));

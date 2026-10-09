@@ -8,15 +8,24 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # vps1 -> secrets.VPS_HOST, vps2 -> secrets.VPS_HOST_2 (skipped if that secret is empty)
+        target: [vps1, vps2]
+    env:
+      TARGET_HOST: ${{ matrix.target == 'vps1' && secrets.VPS_HOST || secrets.VPS_HOST_2 }}
     steps:
-      - name: Deploy all tenants via SSH
+      - name: Deploy all tenants via SSH (${{ matrix.target }})
+        if: ${{ env.TARGET_HOST != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VPS_HOST }}
+          host: ${{ env.TARGET_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script_stop: true
+          command_timeout: 30m
           script: |
             set -e
             bash /var/www/multishop/sources/api/deploy/multishop/deploy-api-all.sh
