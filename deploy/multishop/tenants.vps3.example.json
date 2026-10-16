@@ -1,0 +1,6 @@
+[
+  { "id": "aekviss",   "domain": "aekviss.shop",   "port": 5647, "dbName": "aekviss_shop"   },
+  { "id": "aikves",    "domain": "aikves.shop",    "port": 5648, "dbName": "aikves_shop"    },
+  { "id": "aikkvvis",  "domain": "aikkvvis.shop",  "port": 5649, "dbName": "aikkvvis_shop"  },
+  { "id": "aikssvis",  "domain": "aikssvis.tech",  "port": 5650, "dbName": "aikssvis_tech"  }
+]

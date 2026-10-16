@@ -11,16 +11,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # vps1 -> secrets.VPS_HOST, vps2 -> secrets.VPS_HOST_2 (skipped if that secret is empty)
-        target: [vps1, vps2]
-    env:
-      TARGET_HOST: ${{ matrix.target == 'vps1' && secrets.VPS_HOST || secrets.VPS_HOST_2 }}
+        # vps1=VPS_HOST, vps2=VPS_HOST_2, vps3=VPS_HOST_3 (empty secret = skip that VPS)
+        target: [vps1, vps2, vps3]
     steps:
+      - name: Resolve host for ${{ matrix.target }}
+        id: host
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_HOST_2: ${{ secrets.VPS_HOST_2 }}
+          VPS_HOST_3: ${{ secrets.VPS_HOST_3 }}
+        run: |
+          case "${{ matrix.target }}" in
+            vps1) echo "value=${VPS_HOST}" >> "$GITHUB_OUTPUT" ;;
+            vps2) echo "value=${VPS_HOST_2}" >> "$GITHUB_OUTPUT" ;;
+            vps3) echo "value=${VPS_HOST_3}" >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Deploy all tenants via SSH (${{ matrix.target }})
-        if: ${{ env.TARGET_HOST != '' }}
+        if: ${{ steps.host.outputs.value != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ env.TARGET_HOST }}
+          host: ${{ steps.host.outputs.value }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22

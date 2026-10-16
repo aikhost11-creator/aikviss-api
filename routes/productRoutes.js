@@ -25,6 +25,7 @@ router.post('/importCSV',                auth, upload.single('file'), ctrl.impor
 router.get('/getAllReviews',              auth, ctrl.getAllReviewsByPage);
 router.get('/getProductReviews/:id',     auth, ctrl.getReviewsByProduct);
 router.post('/adminAddReview/:id',       auth, ctrl.adminCreateReview);
+router.post('/adminBulkAddReviews/:id',  auth, upload.single('file'), ctrl.adminBulkAddReviews);
 router.put('/adminUpdateReview/:id',     auth, ctrl.adminUpdateReview);
 router.put('/updateReviewStatus/:id',    auth, ctrl.updateReviewStatus);
 router.delete('/deleteReview/:id',       auth, ctrl.deleteReview);

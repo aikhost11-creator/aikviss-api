@@ -7,6 +7,7 @@
 #   SSL_EMAIL=you@mail.com  -> also issue Let's Encrypt certs (DNS must point here)
 #   SKIP_BUILD=1            -> only API (skip ADMIN/WEB Angular builds)
 #   FORCE_NGINX=1           -> rewrite nginx vhosts even if they exist (drops certbot SSL blocks)
+#   SEED_DEFAULTS=1         -> run database/default_setup.sql on each tenant DB (admin login etc.)
 #
 # Safe to re-run: existing .env / DB passwords are kept, existing vhosts are kept.
 # ============================================================
@@ -33,7 +34,7 @@ echo "==> 1) Packages"
 export DEBIAN_FRONTEND=noninteractive
 timedatectl set-timezone Asia/Kolkata 2>/dev/null || true
 apt-get update -y
-apt-get install -y curl git nginx rsync ufw certbot python3-certbot-nginx jq openssl \
+apt-get install -y curl git nginx rsync ufw certbot python3-certbot-nginx jq openssl dnsutils \
   mysql-server php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-gd unzip
 
 if ! command -v node >/dev/null 2>&1; then
@@ -253,20 +254,40 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
   bash "$DEPLOY/deploy-web-all.sh"
 fi
 
-echo "==> 10) SSL"
+echo "==> 10) Seed default data (optional)"
+if [ "${SEED_DEFAULTS:-0}" = "1" ]; then
+  SEED_SQL="$API_SRC/database/default_setup.sql"
+  if [ -f "$SEED_SQL" ]; then
+    while IFS= read -r row; do
+      DB_NAME=$(echo "$row" | jq -r '.dbName')
+      DOMAIN=$(echo "$row" | jq -r '.domain')
+      echo "   seeding $DOMAIN ($DB_NAME)..."
+      mysql "$DB_NAME" < "$SEED_SQL" || echo "   seed failed for $DB_NAME"
+    done < <(jq -c '.[]' "$TENANTS_JSON")
+    pm2 restart all 2>/dev/null || true
+  else
+    echo "   $SEED_SQL missing — skip"
+  fi
+else
+  echo "   skipped (set SEED_DEFAULTS=1 to insert admin/siteconfig/COD/FAQ/legal)"
+fi
+
+echo "==> 11) SSL"
 VPS_IP=$(curl -fsS4 --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+dns_a() { dig +short A "$1" @8.8.8.8 2>/dev/null | tail -1 || true; }
 while IFS= read -r row; do
   DOMAIN=$(echo "$row" | jq -r '.domain')
   NAMES="$DOMAIN www.$DOMAIN admin.$DOMAIN api.$DOMAIN pma.$DOMAIN"
   NOT_READY=""
   for n in $NAMES; do
-    ip=$(getent ahostsv4 "$n" 2>/dev/null | awk 'NR==1{print $1}' || true)
+    ip=$(dns_a "$n")
     [ "$ip" = "$VPS_IP" ] || NOT_READY="$NOT_READY $n(${ip:-none})"
   done
   if [ -n "$NOT_READY" ]; then
     echo "   $DOMAIN: DNS not pointing to $VPS_IP yet ->$NOT_READY"
   elif [ -n "${SSL_EMAIL:-}" ]; then
-    certbot --nginx --non-interactive --agree-tos -m "$SSL_EMAIL" --redirect --expand \
+    certbot --nginx --non-interactive --agree-tos -m "$SSL_EMAIL" --redirect --expand --keep-until-expiring \
+      --cert-name "$DOMAIN" \
       -d "$DOMAIN" -d "www.$DOMAIN" -d "admin.$DOMAIN" -d "api.$DOMAIN" -d "pma.$DOMAIN" </dev/null \
       || echo "   $DOMAIN: certbot failed (see above)"
   else

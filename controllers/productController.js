@@ -306,89 +306,146 @@ exports.getRelatedProducts = async (req, res) => {
 
 // ── Reviews ────────────────────────────────────────────────────────────────
 
+function reviewErr(res, err, label) {
+    console.error(label + ':', err);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Internal server error' });
+}
+
 exports.addReview = async (req, res) => {
     try {
+        await Review.ensureSchema();
         const result = await Review.create({ ...req.body, productId: req.params.id });
         await Product.updateRating(req.params.id);
         res.status(201).json({ message: 'Review added', data: result.data });
     } catch (err) {
-        console.error('addReview:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'addReview');
     }
 };
 
 exports.getReviews = async (req, res) => {
     try {
+        await Review.ensureSchema();
         const { limit = 8, offset = 0, sort = 'newest' } = req.query;
         const result = await Review.getByProduct(req.params.id, Number(limit), Number(offset), sort);
         res.status(200).json(result);
     } catch (err) {
-        console.error('getReviews:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'getReviews');
     }
 };
 
 exports.getAllReviewsByPage = async (req, res) => {
     try {
+        await Review.ensureSchema();
         const { limit = 20, page = 1, productId } = req.query;
         const result = await Review.getAllByPage(Number(limit), Number(page), productId ? Number(productId) : null);
         res.status(200).json(result);
     } catch (err) {
-        console.error('getAllReviewsByPage:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'getAllReviewsByPage');
     }
 };
 
 exports.updateReviewStatus = async (req, res) => {
     try {
+        await Review.ensureSchema();
+        const existing = await Review.getById(req.params.id);
         await Review.updateStatus(req.params.id, req.body.isActive);
+        if (existing?.productId) await Product.updateRating(existing.productId);
         res.status(200).json({ message: 'Review status updated' });
     } catch (err) {
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'updateReviewStatus');
     }
 };
 
 exports.deleteReview = async (req, res) => {
     try {
+        await Review.ensureSchema();
+        const existing = await Review.getById(req.params.id);
         await Review.delete(req.params.id);
+        if (existing?.productId) await Product.updateRating(existing.productId);
         res.status(200).json({ message: 'Review deleted' });
     } catch (err) {
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'deleteReview');
     }
 };
 
 // Admin: get all reviews for a specific product (including inactive)
 exports.getReviewsByProduct = async (req, res) => {
     try {
+        await Review.ensureSchema();
         const result = await Review.getByProductAdmin(Number(req.params.id));
         res.status(200).json(result);
     } catch (err) {
-        console.error('getReviewsByProduct:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'getReviewsByProduct');
     }
 };
 
 // Admin: create review for a product
 exports.adminCreateReview = async (req, res) => {
     try {
+        await Review.ensureSchema();
         const result = await Review.create({ ...req.body, productId: req.params.id });
         await Product.updateRating(req.params.id);
         res.status(201).json({ message: 'Review added', data: result.data });
     } catch (err) {
-        console.error('adminCreateReview:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'adminCreateReview');
     }
 };
 
 // Admin: update review
 exports.adminUpdateReview = async (req, res) => {
     try {
+        await Review.ensureSchema();
+        const existing = await Review.getById(req.params.id);
         await Review.update(req.params.id, req.body);
-        // recalculate rating for the product
-        if (req.body.productId) await Product.updateRating(req.body.productId);
+        const productId = req.body.productId || existing?.productId;
+        if (productId) await Product.updateRating(productId);
         res.status(200).json({ message: 'Review updated' });
     } catch (err) {
-        console.error('adminUpdateReview:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        reviewErr(res, err, 'adminUpdateReview');
+    }
+};
+
+// Admin: bulk add reviews from CSV for one product
+// CSV headers (flexible): reviewerName|customerName|name, rating, title, body|content|review, reviewImage|image
+exports.adminBulkAddReviews = async (req, res) => {
+    try {
+        await Review.ensureSchema();
+        if (!req.file || !req.file.buffer) {
+            return res.status(400).json({ error: 'CSV file is required (field name: file)' });
+        }
+        const productId = Number(req.params.id);
+        if (!productId) return res.status(400).json({ error: 'Invalid product id' });
+
+        const { parseCsv } = require('../utils/csvHelper');
+        const text = req.file.buffer.toString('utf8');
+        const { records } = parseCsv(text);
+        if (!records.length) {
+            return res.status(400).json({ error: 'CSV has no data rows' });
+        }
+
+        // Normalize header aliases (case-insensitive)
+        const mapped = records.map((r) => {
+            const lower = {};
+            Object.keys(r).forEach((k) => { lower[k.trim().toLowerCase()] = r[k]; });
+            return {
+                reviewerName: lower.reviewername || lower.customername || lower.name || lower.customer || '',
+                rating: lower.rating || lower.stars || lower.star || 5,
+                title: lower.title || lower.headline || '',
+                body: lower.body || lower.content || lower.review || lower.comment || lower.text || '',
+                reviewImage: lower.reviewimage || lower.image || lower.img || lower.photo || '',
+            };
+        });
+
+        const result = await Review.bulkCreate(productId, mapped);
+        await Product.updateRating(productId);
+        res.status(200).json({
+            message: `Added ${result.created} review(s)`,
+            created: result.created,
+            skipped: result.skipped,
+            errors: result.errors,
+        });
+    } catch (err) {
+        reviewErr(res, err, 'adminBulkAddReviews');
     }
 };
