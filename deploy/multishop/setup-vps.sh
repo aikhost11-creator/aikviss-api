@@ -37,11 +37,17 @@ apt-get update -y
 apt-get install -y curl git nginx rsync ufw certbot python3-certbot-nginx jq openssl dnsutils \
   mysql-server php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-gd unzip
 
-if ! command -v node >/dev/null 2>&1; then
+# Node 20 + npm (nodesource). Re-run safe if already installed.
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "   Installing Node.js 20 + npm..."
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
+command -v node >/dev/null 2>&1 || { echo "ERROR: node still missing after install"; exit 1; }
+command -v npm >/dev/null 2>&1 || { echo "ERROR: npm still missing after install"; exit 1; }
+echo "   node $(node -v)  npm $(npm -v)"
 command -v pm2 >/dev/null 2>&1 || npm i -g pm2
+command -v pm2 >/dev/null 2>&1 || { echo "ERROR: pm2 install failed"; exit 1; }
 
 systemctl enable --now mysql nginx
 
