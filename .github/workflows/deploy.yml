@@ -11,8 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # vps1=VPS_HOST, vps2=VPS_HOST_2, vps3=VPS_HOST_3 (empty secret = skip that VPS)
-        target: [vps1, vps2, vps3]
+        # vps1=VPS_HOST, vps2=VPS_HOST_2, vps3=VPS_HOST_3, vps4=VPS_HOST_4 (empty secret = skip that VPS)
+        target: [vps1, vps2, vps3, vps4]
     steps:
       - name: Resolve host for ${{ matrix.target }}
         id: host
@@ -20,11 +20,13 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_HOST_2: ${{ secrets.VPS_HOST_2 }}
           VPS_HOST_3: ${{ secrets.VPS_HOST_3 }}
+          VPS_HOST_4: ${{ secrets.VPS_HOST_4 }}
         run: |
           case "${{ matrix.target }}" in
             vps1) echo "value=${VPS_HOST}" >> "$GITHUB_OUTPUT" ;;
             vps2) echo "value=${VPS_HOST_2}" >> "$GITHUB_OUTPUT" ;;
             vps3) echo "value=${VPS_HOST_3}" >> "$GITHUB_OUTPUT" ;;
+            vps4) echo "value=${VPS_HOST_4}" >> "$GITHUB_OUTPUT" ;;
           esac
       - name: Deploy all tenants via SSH (${{ matrix.target }})
         if: ${{ steps.host.outputs.value != '' }}

@@ -35,13 +35,18 @@ export DEBIAN_FRONTEND=noninteractive
 timedatectl set-timezone Asia/Kolkata 2>/dev/null || true
 apt-get update -y
 apt-get install -y curl git nginx rsync ufw certbot python3-certbot-nginx jq openssl dnsutils \
-  mysql-server php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-gd unzip
+  mysql-server php-cli php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-gd unzip
 
-# Node 20 + npm (nodesource). Re-run safe if already installed.
-if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  echo "   Installing Node.js 20 + npm..."
+# Node + npm. Newer Ubuntu ships its own nodejs (without npm) that outranks nodesource 20,
+# so: install nodesource only when node is missing, then add Ubuntu's npm if still absent.
+if ! command -v node >/dev/null 2>&1; then
+  echo "   Installing Node.js 20..."
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "   npm missing — installing distro npm package..."
+  apt-get install -y npm
 fi
 command -v node >/dev/null 2>&1 || { echo "ERROR: node still missing after install"; exit 1; }
 command -v npm >/dev/null 2>&1 || { echo "ERROR: npm still missing after install"; exit 1; }
