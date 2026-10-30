@@ -5,8 +5,10 @@ const db = require('../config/db');
 class PhoneValidator {
     constructor() {
         this.blockedMobilesSet = new Set();
+        this.adminBlockedSet = new Set();
         this.isLoaded = false;
         this.isLoading = false;
+        this.adminReady = false;
         // Sync preload so first request never races
         this.loadJsonSync();
     }
@@ -44,7 +46,7 @@ class PhoneValidator {
     }
 
     async init() {
-        if (this.isLoaded || this.isLoading) return;
+        if (this.isLoading || this.adminReady) return;
         this.isLoading = true;
         try {
             if (this.blockedMobilesSet.size === 0) this.loadJsonSync();
@@ -63,7 +65,19 @@ class PhoneValidator {
                 if (dbCount > 0) console.log(`[PhoneValidator] +${dbCount} from old_data_mobiles table`);
             } catch (_) { /* table may not exist */ }
 
+            try {
+                const [adminRows] = await db.execute('SELECT mobile FROM admin_blocked_mobiles');
+                for (const row of adminRows) {
+                    const clean = this.normalizePhone(row.mobile);
+                    if (clean && clean.length === 10) this.adminBlockedSet.add(clean);
+                }
+                if (adminRows.length) {
+                    console.log(`[PhoneValidator] ${this.adminBlockedSet.size} admin-blocked mobiles`);
+                }
+            } catch (_) { /* table may not exist yet */ }
+
             this.isLoaded = true;
+            this.adminReady = true;
             console.log(`[PhoneValidator] Ready — ${this.blockedMobilesSet.size} blocked numbers`);
         } catch (err) {
             console.error('[PhoneValidator] Init error:', err.message);
@@ -85,8 +99,9 @@ class PhoneValidator {
         }
 
         if (this.blockedMobilesSet.has(clean)) return true;
+        if (this.adminBlockedSet.has(clean)) return true;
 
-        // Live DB fallback
+        // Live DB fallback — old file list
         try {
             const [rows] = await db.execute(
                 'SELECT 1 FROM old_data_mobiles WHERE mobile = ? OR mobile = ? LIMIT 1',
@@ -98,7 +113,29 @@ class PhoneValidator {
             }
         } catch (_) {}
 
+        // Live DB fallback — numbers the shop admin added / edited / uploaded
+        try {
+            const [rows] = await db.execute(
+                'SELECT 1 FROM admin_blocked_mobiles WHERE mobile = ? LIMIT 1',
+                [clean]
+            );
+            if (rows.length > 0) {
+                this.adminBlockedSet.add(clean);
+                return true;
+            }
+        } catch (_) {}
+
         return false;
+    }
+
+    rememberAdmin(rawPhone) {
+        const clean = this.normalizePhone(rawPhone);
+        if (clean && clean.length === 10) this.adminBlockedSet.add(clean);
+    }
+
+    forgetAdmin(rawPhone) {
+        const clean = this.normalizePhone(rawPhone);
+        if (clean) this.adminBlockedSet.delete(clean);
     }
 
     getCount() {

@@ -2,6 +2,7 @@ const { createOrder, getAllOrders, getAllOrdersForExport, saveShipeasoResponse, 
 const axios = require('axios');
 const db    = require('../config/db');
 const phoneValidator = require('../utils/phoneValidator');
+const allowedPincodes = require('../models/allowedPincodeModel');
 
 // ── Fetch product SKU + variants for a product id ─────────────────────────────
 async function getProductData(productId) {
@@ -193,13 +194,12 @@ async function create(req, res) {
             );
         }
 
-        // ── Duplicate: same normalized phone + active order (last 24h) — no new DB row ──
+        // ── Already ordered: same phone has any non-cancelled order — no new DB row ──
         const [existing] = await db.execute(
             `SELECT id FROM orders
              WHERE RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(contactPhone,''),'+',''),' ',''),'-',''), 10) = ?
                AND status NOT IN ('cancelled')
-               AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-             ORDER BY created_at DESC LIMIT 1`,
+             ORDER BY id DESC LIMIT 1`,
             [cleanPhone]
         );
         if (existing.length > 0) {
@@ -207,6 +207,11 @@ async function create(req, res) {
             return res.status(200).json(
                 alreadyCreatedPayload(phone, existingOrder, data.items, data.deliveryAddress)
             );
+        }
+
+        const pinCheck = await allowedPincodes.checkPincode(allowedPincodes.extractOrderPincode(data));
+        if (!pinCheck.allowed) {
+            return res.status(400).json({ error: pinCheck.message || allowedPincodes.REJECT_MESSAGE });
         }
 
         data.orderNumber = `ORD-${Date.now()}`;

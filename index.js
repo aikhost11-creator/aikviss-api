@@ -24,6 +24,8 @@ const faqRoutes = require('./routes/faqRoutes');
 const abandonCheckoutRoutes = require('./routes/abandonCheckoutRoutes');
 const aboutUsRoutes = require('./routes/aboutUsRoutes');
 const legalPagesRoutes = require('./routes/legalPagesRoutes');
+const blockedMobileRoutes = require('./routes/blockedMobileRoutes');
+const allowedPincodeRoutes = require('./routes/allowedPincodeRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,6 +60,8 @@ app.use('/api/faq', faqRoutes);
 app.use('/api/abandon-checkout', abandonCheckoutRoutes);
 app.use('/api/about-us', aboutUsRoutes);
 app.use('/api/legal', legalPagesRoutes);
+app.use('/api/blocked-mobiles', blockedMobileRoutes);
+app.use('/api/allowed-pincodes', allowedPincodeRoutes);
 
 // Run DB init (non-blocking for Vercel serverless)
 initDB().catch((err) => {

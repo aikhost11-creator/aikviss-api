@@ -116,6 +116,7 @@ const tables = [
     { name: 'siteconfig_buyNowText_col',        sql: "ALTER TABLE `siteconfig` ADD COLUMN `buyNowText` VARCHAR(100) DEFAULT 'BUY NOW' AFTER `metaPixelId`" },
     { name: 'siteconfig_buyNowSubtext_col',     sql: "ALTER TABLE `siteconfig` ADD COLUMN `buyNowSubtext` VARCHAR(200) DEFAULT NULL AFTER `buyNowText`" },
     { name: 'siteconfig_metaAccessToken_col',   sql: "ALTER TABLE `siteconfig` ADD COLUMN `metaAccessToken` VARCHAR(500) DEFAULT NULL AFTER `buyNowSubtext`" },
+    { name: 'siteconfig_is_validate_pincode_col', sql: "ALTER TABLE `siteconfig` ADD COLUMN `is_validate_pincode` TINYINT(1) NOT NULL DEFAULT 0" },
 
     // ABANDON CHECKOUTS
     {
@@ -509,6 +510,40 @@ const tables = [
             CREATE TABLE IF NOT EXISTS \`old_data_mobiles\` (
                 \`mobile\` VARCHAR(20) NOT NULL,
                 PRIMARY KEY (\`mobile\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `
+    },
+
+    // ADMIN BLOCKED MOBILES — numbers the shop admin excludes (CSV / add / edit)
+    {
+        name: 'admin_blocked_mobiles',
+        sql: `
+            CREATE TABLE IF NOT EXISTS \`admin_blocked_mobiles\` (
+                \`id\`         INT(11)      NOT NULL AUTO_INCREMENT,
+                \`mobile\`     VARCHAR(10)  NOT NULL,
+                \`note\`       VARCHAR(255) DEFAULT NULL,
+                \`source\`     VARCHAR(20)  NOT NULL DEFAULT 'manual',
+                \`created_at\` DATETIME     NOT NULL,
+                \`updated_at\` DATETIME     NOT NULL,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`uq_admin_blocked_mobile\` (\`mobile\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `
+    },
+
+    // ALLOWED PINCODES — used only when siteconfig.is_validate_pincode = 1
+    {
+        name: 'allowed_pincodes',
+        sql: `
+            CREATE TABLE IF NOT EXISTS \`allowed_pincodes\` (
+                \`id\`         INT(11)      NOT NULL AUTO_INCREMENT,
+                \`pincode\`    VARCHAR(6)   NOT NULL,
+                \`note\`       VARCHAR(255) DEFAULT NULL,
+                \`source\`     VARCHAR(20)  NOT NULL DEFAULT 'manual',
+                \`created_at\` DATETIME     NOT NULL,
+                \`updated_at\` DATETIME     NOT NULL,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`uq_allowed_pincode\` (\`pincode\`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `
     }
